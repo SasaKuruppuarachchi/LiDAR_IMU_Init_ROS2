@@ -3,6 +3,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include <rclcpp/qos.hpp>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <cerrno>
 #include <Python.h>
 #include <Eigen/Core>
 #include <nav_msgs/msg/odometry.hpp>
@@ -40,6 +42,27 @@ condition_variable sig_buffer;
 // string root_dir = ament_index_cpp::get_package_share_directory("lidar_imu_init2");
 string root_dir = ROOT_DIR;
 string map_file_path, lid_topic, imu_topic;
+
+namespace {
+
+bool ensure_directory(const std::string & path)
+{
+    struct stat info;
+    if (stat(path.c_str(), &info) == 0) {
+        return S_ISDIR(info.st_mode);
+    }
+
+    return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
+}
+
+bool ensure_runtime_output_directories()
+{
+    return ensure_directory(root_dir + "Log") &&
+           ensure_directory(root_dir + "result") &&
+           ensure_directory(root_dir + "PCD");
+}
+
+}  // namespace
 
 int iterCount = 0, feats_down_size = 0, NUM_MAX_ITERATIONS = 0, laserCloudValidNum = 0,
     effect_feat_num = 0, scan_count = 0, publish_count = 0;
@@ -908,12 +931,22 @@ public:
         Jaco_rot.setZero();
 
         /*** debug record ***/
+        const bool output_dirs_ready = ensure_runtime_output_directories();
+        if (!output_dirs_ready) {
+            RCLCPP_WARN(this->get_logger(), "Failed to create output directories under %s", root_dir.c_str());
+        }
+
         fout_out.open(DEBUG_FILE_DIR("mat_out.txt"), ios::out);
         fout_result.open(RESULT_FILE_DIR("Initialization_result.txt"), ios::out);
-        if (fout_out)
-            cout << "~~~~" << ROOT_DIR << " file opened" << endl;
-        else
-            cout << "~~~~" << ROOT_DIR << " doesn't exist" << endl;        
+        if (fout_out && fout_result) {
+            cout << "~~~~ output files opened under " << root_dir << endl;
+        } else {
+            RCLCPP_WARN(
+                this->get_logger(),
+                "Could not open output files under %s (debug: %s, result: %s)",
+                root_dir.c_str(), DEBUG_FILE_DIR("mat_out.txt").c_str(),
+                RESULT_FILE_DIR("Initialization_result.txt").c_str());
+        }
 
         /*** ROS subscribe initialization ***/
         if (p_pre->lidar_type == AVIA)

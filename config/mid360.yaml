@@ -1,8 +1,8 @@
 laser_mapping:
   ros__parameters:
     common:
-        lid_topic:  "/livox/lidar"
-        imu_topic:  "/mavros/imu/data_raw"
+        lid_topic:  "/drone0/livox/lidar"
+        imu_topic:  "/drone0/sensor_measurements/imu"
 
     preprocess:
         lidar_type: 1                # Livox series LiDAR
